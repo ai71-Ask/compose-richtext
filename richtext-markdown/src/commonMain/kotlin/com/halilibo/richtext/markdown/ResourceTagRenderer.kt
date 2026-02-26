@@ -1,19 +1,53 @@
 package com.halilibo.richtext.markdown
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 
 /**
+ * Enum representing the type of resource in a resource tag.
+ */
+public enum class ResourceType {
+    EMAIL_THREAD,
+    EMAIL,
+    CALENDAR_EVENT,
+    CALENDAR_SERIES,
+    CITATION,
+    FILE,
+    DOCUMENT,
+    UNKNOWN;
+
+    public companion object {
+        /**
+         * Parse a string value to ResourceType enum.
+         * Returns UNKNOWN if the string doesn't match any known type.
+         */
+        public fun fromString(value: String): ResourceType {
+            return when (value.lowercase()) {
+                "email_thread" -> EMAIL_THREAD
+                "email" -> EMAIL
+                "calendar_event" -> CALENDAR_EVENT
+                "calendar_series" -> CALENDAR_SERIES
+                "citation" -> CITATION
+                "file" -> FILE
+                "document" -> DOCUMENT
+                else -> UNKNOWN
+            }
+        }
+    }
+}
+
+/**
  * Data class representing a resource tag from markdown content.
  *
- * @param resourceType The type of resource (e.g., "email_thread", "calendar_event")
+ * @param resourceType The type of resource
  * @param uri The unique identifier for this resource
  * @param index The 1-based display index of this resource in the content (1, 2, 3...)
  */
 public data class ResourceTagInfo(
-    val resourceType: String,
+    val resourceType: ResourceType,
     val uri: String,
     val index: Int = 0
 )
@@ -46,8 +80,9 @@ public val LocalResourceTagRenderer: androidx.compose.runtime.ProvidableComposit
     staticCompositionLocalOf { null }
 
 /**
- * CompositionLocal for providing URI to index mapping.
- * This allows resource tags to display their correct index number.
+ * CompositionLocal for providing URI to index mapping, grouped by ResourceType.
+ * This allows resource tags to display their correct index number within their type group.
+ * Uses SnapshotStateMap to support dynamic addition of URIs.
  */
-public val LocalResourceTagIndices: androidx.compose.runtime.ProvidableCompositionLocal<Map<String, Int>> =
-    staticCompositionLocalOf { emptyMap() }
+public val LocalResourceTagIndices: androidx.compose.runtime.ProvidableCompositionLocal<SnapshotStateMap<ResourceType, SnapshotStateMap<String, Int>>> =
+    staticCompositionLocalOf { SnapshotStateMap() }

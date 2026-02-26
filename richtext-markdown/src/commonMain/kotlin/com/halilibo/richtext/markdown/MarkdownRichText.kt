@@ -3,6 +3,7 @@ package com.halilibo.richtext.markdown
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.IntSize
@@ -140,8 +141,13 @@ private fun computeRichTextString(astNode: AstNode): RichTextString {
               }
             ) {
               val renderer = LocalResourceTagRenderer.current
-              val indices = LocalResourceTagIndices.current
-              val index = indices[uri] ?: 0
+              val indicesByType = LocalResourceTagIndices.current
+              // Get the indices map for this specific ResourceType
+              val typeIndices = indicesByType.getOrPut(resourceType) { SnapshotStateMap() }
+              // Get existing index or assign next available one within this type
+              val index = typeIndices[uri] ?: (typeIndices.size + 1).also { newIndex ->
+                typeIndices[uri] = newIndex
+              }
               val resourceInfo = ResourceTagInfo(
                 resourceType = resourceType,
                 uri = uri,

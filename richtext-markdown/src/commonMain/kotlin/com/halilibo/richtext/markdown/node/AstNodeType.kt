@@ -1,6 +1,7 @@
 package com.halilibo.richtext.markdown.node
 
 import androidx.compose.runtime.Immutable
+import com.halilibo.richtext.markdown.ResourceType
 import com.halilibo.richtext.ui.string.RichTextString
 
 /**
@@ -194,7 +195,7 @@ public data class AstText(
  */
 @Immutable
 public data class AstResourceTag(
-  val resourceType: String,
+  val resourceType: ResourceType,
   val uri: String
 ) : AstInlineNodeType()
 

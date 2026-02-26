@@ -1,5 +1,6 @@
 package com.halilibo.richtext.commonmark
 
+import com.halilibo.richtext.markdown.ResourceType
 import com.halilibo.richtext.markdown.node.AstBlockQuote
 import com.halilibo.richtext.markdown.node.AstCode
 import com.halilibo.richtext.markdown.node.AstDocument
@@ -106,7 +107,7 @@ private fun parseResourceTag(literal: String): AstResourceTag? {
   val type = attributes["type"] ?: return null
   val uri = attributes["uri"] ?: return null
 
-  return AstResourceTag(resourceType = type, uri = uri)
+  return AstResourceTag(resourceType = ResourceType.fromString(type), uri = uri)
 }
 
 /**
