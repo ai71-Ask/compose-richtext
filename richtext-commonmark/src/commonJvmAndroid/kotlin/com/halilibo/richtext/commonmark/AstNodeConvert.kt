@@ -1,5 +1,6 @@
 package com.halilibo.richtext.commonmark
 
+import com.halilibo.richtext.markdown.KB_URI_SCHEME
 import com.halilibo.richtext.markdown.ResourceType
 import com.halilibo.richtext.markdown.node.AstBlockQuote
 import com.halilibo.richtext.markdown.node.AstCode
@@ -167,10 +168,20 @@ internal fun convert(
     is IndentedCodeBlock -> AstIndentedCodeBlock(
       literal = node.literal
     )
-    is Link -> AstLink(
-      title = node.title ?: "",
-      destination = node.destination
-    )
+    is Link -> {
+      val destination = node.destination
+      if (destination?.startsWith(KB_URI_SCHEME) == true) {
+        AstResourceTag(
+          resourceType = ResourceType.CITATION,
+          uri = destination
+        )
+      } else {
+        AstLink(
+          title = node.title ?: "",
+          destination = destination
+        )
+      }
+    }
     is ListItem -> AstListItem
     is OrderedList -> AstOrderedList(
       startNumber = node.startNumber,

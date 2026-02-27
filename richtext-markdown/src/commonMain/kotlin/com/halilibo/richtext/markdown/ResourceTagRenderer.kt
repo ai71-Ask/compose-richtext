@@ -7,6 +7,12 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 
 /**
+ * URI scheme prefix for knowledge base citations.
+ * Used to identify markdown links that should be rendered as citation resource tags.
+ */
+public const val KB_URI_SCHEME: String = "kb://"
+
+/**
  * Enum representing the type of resource in a resource tag.
  */
 public enum class ResourceType {
