@@ -235,7 +235,12 @@ internal fun convert(
   }
 
   if (newNode != null) {
-    newNode.links.firstChild = convert(node.firstChild, parentNode = newNode, previousNode = null, fadeOutEffect = fadeOutEffect)
+      if ((newNode.type as? AstResourceTag)?.uri?.startsWith(KB_URI_SCHEME) == true) {
+          //Avoid showing the resource title
+          newNode.links.firstChild = null
+      } else {
+          newNode.links.firstChild = convert(node.firstChild, parentNode = newNode, previousNode = null, fadeOutEffect = fadeOutEffect)
+      }
     newNode.links.next = convert(node.next, parentNode = parentNode, previousNode = newNode, fadeOutEffect = fadeOutEffect)
   }
 

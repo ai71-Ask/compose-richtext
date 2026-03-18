@@ -51,7 +51,7 @@ public fun ResourceBadge(
             .clip(CircleShape)
             .background(backgroundColor)
             .clickable(onClick = onClick)
-            .padding(2.dp),
+            .padding(1.dp),
         contentAlignment = Alignment.Center,
     ) {
         BasicText(
