@@ -20,9 +20,8 @@ import kotlin.math.pow
 
 /**
  * Renders a [RichTextString] as created with [richTextString].
- *
- * @sample com.halilibo.richtext.ui.previews.TextPreview
  */
+@Suppress("UnusedBoxWithConstraintsScope")
 @Composable
 public fun RichTextScope.Text(
   text: RichTextString,
