@@ -227,13 +227,13 @@ internal fun convert(
         ))
       }
 
-      if (newNode != null && (newNode.type as? AstResourceTag)?.uri?.startsWith(KB_URI_SCHEME) != true) {
+      if (newNode != null) {
         if (firstCreated == null) firstCreated = newNode
         prev?.links?.next = newNode
 
         // Push child processing onto the explicit stack instead of recursing
         val child = cmNode.firstChild
-        if (child != null) {
+        if (child != null && (newNode.type as? AstResourceTag)?.uri?.startsWith(KB_URI_SCHEME) != true) {
           stack.addLast(ConvertWorkItem(child, newNode, null) { newNode.links.firstChild = it })
         }
 
