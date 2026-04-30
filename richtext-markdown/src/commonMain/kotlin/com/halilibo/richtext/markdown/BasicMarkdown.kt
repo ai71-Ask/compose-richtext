@@ -2,7 +2,6 @@ package com.halilibo.richtext.markdown
 
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -15,6 +14,8 @@ import com.halilibo.richtext.markdown.node.AstFootReferenceDefinition
 import com.halilibo.richtext.markdown.node.AstHeading
 import com.halilibo.richtext.markdown.node.AstHtmlBlock
 import com.halilibo.richtext.markdown.node.AstIndentedCodeBlock
+import com.halilibo.richtext.markdown.node.AstCustomBlockNodeType
+import com.halilibo.richtext.markdown.node.AstCustomInlineNodeType
 import com.halilibo.richtext.markdown.node.AstInlineNodeType
 import com.halilibo.richtext.markdown.node.AstLinkReferenceDefinition
 import com.halilibo.richtext.markdown.node.AstListItem
@@ -29,9 +30,6 @@ import com.halilibo.richtext.markdown.node.AstTableRow
 import com.halilibo.richtext.markdown.node.AstText
 import com.halilibo.richtext.markdown.node.AstThematicBreak
 import com.halilibo.richtext.markdown.node.AstUnorderedList
-import com.halilibo.richtext.markdown.node.AstResourceTag
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import com.halilibo.richtext.ui.BlockQuote
 import com.halilibo.richtext.ui.CodeBlock
 import com.halilibo.richtext.ui.FormattedList
@@ -45,19 +43,35 @@ import com.halilibo.richtext.ui.string.Text
 import com.halilibo.richtext.ui.string.richTextString
 
 /**
+ * CompositionLocal that exposes the active [AstInlineNodeComposer] to inline rendering.
+ * Used internally by [MarkdownRichText] to delegate consumer-defined inline node rendering
+ * (subclasses of [AstCustomInlineNodeType]).
+ */
+internal val LocalInlineNodeComposer =
+  androidx.compose.runtime.staticCompositionLocalOf<AstInlineNodeComposer?> { null }
+
+/**
  * A composable that renders Markdown content pointed by [astNode] into this [RichTextScope].
  * Designed to be a building block that should be wrapped with a specific parser.
  *
  * @param astNode Root node of Markdown tree. This can be obtained via a parser.
  * @param astBlockNodeComposer An interceptor to take control of composing any block type node's
  * rendering. Use it to render images, html text, tables with your own components.
+ * @param astInlineNodeComposer An interceptor for inline node rendering, mirror of
+ * [astBlockNodeComposer]. Required for rendering subclasses of
+ * [com.halilibo.richtext.markdown.node.AstCustomInlineNodeType].
  */
 @Composable
 public fun RichTextScope.BasicMarkdown(
   astNode: AstNode,
-  astBlockNodeComposer: AstBlockNodeComposer? = null
+  astBlockNodeComposer: AstBlockNodeComposer? = null,
+  astInlineNodeComposer: AstInlineNodeComposer? = null,
 ) {
-  RecursiveRenderMarkdownAst(astNode, astBlockNodeComposer)
+  androidx.compose.runtime.CompositionLocalProvider(
+    LocalInlineNodeComposer provides astInlineNodeComposer
+  ) {
+    RecursiveRenderMarkdownAst(astNode, astBlockNodeComposer)
+  }
 }
 
 /**
@@ -82,6 +96,30 @@ public interface AstBlockNodeComposer {
   public fun RichTextScope.Compose(
     astNode: AstNode,
     visitChildren: @Composable (AstNode) -> Unit
+  )
+}
+
+/**
+ * Mirror of [AstBlockNodeComposer] for inline content. Implementations are responsible for
+ * rendering custom inline nodes — typically subclasses of
+ * [com.halilibo.richtext.markdown.node.AstCustomInlineNodeType] — inside the surrounding
+ * paragraph/heading rich-text string. Implementations must emit their content via
+ * [com.halilibo.richtext.ui.string.RichTextString.Builder.appendInlineContent] so it composes
+ * inline with the rest of the text run.
+ */
+public interface AstInlineNodeComposer {
+
+  /** Returns true if [AppendInline] handles this [astInlineNodeType]. */
+  public fun predicate(astInlineNodeType: AstInlineNodeType): Boolean
+
+  /**
+   * Append the rendering for [astNode] (whose type satisfies [predicate]) onto [builder].
+   * Implementations typically call [com.halilibo.richtext.ui.string.RichTextString.Builder.appendInlineContent]
+   * with the composable they want to inline.
+   */
+  public fun appendInline(
+    builder: com.halilibo.richtext.ui.string.RichTextString.Builder,
+    astNode: AstNode,
   )
 }
 
@@ -235,43 +273,22 @@ private val DefaultAstNodeComposer = object : AstBlockNodeComposer {
         println("MarkdownRichText: Unexpected AstListItem while traversing the Abstract Syntax Tree.")
       }
 
-      is AstResourceTag -> {
-        // Handle resource tags that appear at block level (from HtmlBlock parsing)
-        val uri = astNodeType.uri
-        val resourceType = astNodeType.resourceType
-        Text(text = richTextString {
-          appendInlineContent(
-            content = InlineContent(
-              initialSize = {
-                IntSize(24.dp.roundToPx(), 24.dp.roundToPx())
-              }
-            ) {
-              val renderer = LocalResourceTagRenderer.current
-              val indicesByType = LocalResourceTagIndices.current
-              // Get the indices map for this specific ResourceType
-              val typeIndices = indicesByType.getOrPut(resourceType) { SnapshotStateMap() }
-              // Get existing index or assign next available one within this type
-              val index = typeIndices[uri] ?: (typeIndices.size + 1).also { newIndex ->
-                typeIndices[uri] = newIndex
-              }
-              val resourceInfo = ResourceTagInfo(
-                resourceType = resourceType,
-                uri = uri,
-                index = index
-              )
-              if (renderer != null) {
-                renderer.content(resourceInfo) {
-                  renderer.onResourceTagClick?.onClick(resourceInfo)
-                }
-              } else {
-                ResourceBadge(
-                  index = index,
-                  onClick = { /* No-op when no renderer provided */ }
-                )
-              }
-            }
-          )
-        })
+      is AstCustomBlockNodeType -> {
+        // Custom block types must be handled by an AstBlockNodeComposer. If we got here, no
+        // composer claimed this node — render nothing rather than crash, but log so it's visible.
+        println("MarkdownRichText: AstCustomBlockNodeType $astNodeType has no registered composer.")
+      }
+
+      is AstCustomInlineNodeType -> {
+        // A custom inline node at block level happens when a plugin maps a block-level commonmark
+        // node (e.g. HtmlBlock containing `<resource …/>` on its own line) to an inline AST type.
+        // Render it inline inside a synthetic Text so the badge still appears.
+        val composer = LocalInlineNodeComposer.current
+        if (composer != null && composer.predicate(astNodeType)) {
+          Text(richTextString { composer.appendInline(this, astNode) })
+        } else {
+            println("MarkdownRichText: Unexpected AstCustomInlineNodeType $astNodeType at block level.")
+        }
       }
 
       is AstInlineNodeType -> {

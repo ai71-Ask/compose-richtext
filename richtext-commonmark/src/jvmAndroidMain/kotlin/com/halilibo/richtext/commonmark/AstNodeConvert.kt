@@ -1,9 +1,9 @@
 package com.halilibo.richtext.commonmark
 
-import com.halilibo.richtext.markdown.KB_URI_SCHEME
-import com.halilibo.richtext.markdown.ResourceType
 import com.halilibo.richtext.markdown.node.AstBlockQuote
 import com.halilibo.richtext.markdown.node.AstCode
+import com.halilibo.richtext.markdown.node.AstCustomBlockNodeType
+import com.halilibo.richtext.markdown.node.AstCustomInlineNodeType
 import com.halilibo.richtext.markdown.node.AstDocument
 import com.halilibo.richtext.markdown.node.AstEmphasis
 import com.halilibo.richtext.markdown.node.AstFencedCodeBlock
@@ -23,7 +23,6 @@ import com.halilibo.richtext.markdown.node.AstNodeLinks
 import com.halilibo.richtext.markdown.node.AstNodeType
 import com.halilibo.richtext.markdown.node.AstOrderedList
 import com.halilibo.richtext.markdown.node.AstParagraph
-import com.halilibo.richtext.markdown.node.AstResourceTag
 import com.halilibo.richtext.markdown.node.AstSoftLineBreak
 import com.halilibo.richtext.markdown.node.AstStrikethrough
 import com.halilibo.richtext.markdown.node.AstStrongEmphasis
@@ -91,8 +90,7 @@ private class ConvertWorkItem(
  * Maps a CommonMark [Node] to its corresponding [AstNodeType].
  * Returns null for unrecognized node types (CustomNode, CustomBlock, etc.).
  */
-private fun convertNodeType(node: Node, fadeOutEffect: Boolean = false,
-): AstNodeType? = when (node) {
+private fun convertNodeType(node: Node): AstNodeType? = when (node) {
   is BlockQuote -> AstBlockQuote
   is BulletList -> AstUnorderedList(bulletMarker = node.bulletMarker)
   is Code -> AstCode(literal = node.literal)
@@ -110,55 +108,34 @@ private fun convertNodeType(node: Node, fadeOutEffect: Boolean = false,
     level = node.level
   )
   is ThematicBreak -> AstThematicBreak
-  is HtmlInline -> parseResourceTag(node.literal) ?: AstHtmlInline(
-    literal = node.literal
+  is HtmlInline -> AstHtmlInline(
+      literal = node.literal
   )
-  is HtmlBlock -> {
-    // Try to parse resource tags from HTML blocks (tags on their own lines)
-    parseResourceTag(node.literal.trim()) ?: AstHtmlBlock(
-        literal = node.literal
-    )
-  }
+  is HtmlBlock -> AstHtmlBlock(
+      literal = node.literal
+  )
   is Image -> {
-    if (node.destination == null) {
-      null
-    }
-    else {
-      AstImage(
-        title = node.title ?: "",
-        destination = node.destination
-      )
-    }
+    if (node.destination == null) null
+    else AstImage(title = node.title ?: "", destination = node.destination)
   }
-  is IndentedCodeBlock -> AstIndentedCodeBlock(
-    literal = node.literal
-  )
+  is IndentedCodeBlock -> AstIndentedCodeBlock(literal = node.literal)
   is Link -> {
     val destination = node.destination
-    if (destination?.startsWith(KB_URI_SCHEME) == true) {
-        AstResourceTag(
-            resourceType = ResourceType.CITATION,
-            uri = destination
-        )
-    } else {
-        AstLink(
-            title = node.title ?: "",
-            destination = destination
-        )
-    }
+    if (destination == null) null
+    else AstLink(title = node.title ?: "", destination = destination)
   }
   is ListItem -> AstListItem
   is OrderedList -> AstOrderedList(
     startNumber = node.startNumber,
     delimiter = node.delimiter
   )
-  is Paragraph -> AstParagraph(fadeOutEffect = fadeOutEffect)
+  is Paragraph -> AstParagraph(false)
   is SoftLineBreak -> AstSoftLineBreak
   is StrongEmphasis -> AstStrongEmphasis(
-    delimiter = node.openingDelimiter
+      delimiter = node.openingDelimiter
   )
   is Text -> AstText(
-    literal = node.literal
+      literal = node.literal
   )
   is LinkReferenceDefinition -> AstLinkReferenceDefinition(
     title = node.title ?: "",
@@ -202,6 +179,7 @@ internal fun convert(
   fadeOutEffect: Boolean = false,
   parentNode: AstNode? = null,
   previousNode: AstNode? = null,
+  plugins: List<AstNodePlugin> = emptyList(),
 ): AstNode? {
   node ?: return null
 
@@ -219,7 +197,14 @@ internal fun convert(
 
     // Iterate through siblings instead of recursing
     while (cmNode != null) {
-      val nodeType = convertNodeType(cmNode, fadeOutEffect)
+      var pluginNode : AstNodeType? = null
+      for (plugin in plugins) {
+        plugin.convert(cmNode)?.let {
+            pluginNode = it
+            break
+        }
+      }
+      val nodeType = pluginNode ?: convertNodeType(cmNode)
       val newNode = nodeType?.let {
         AstNode(it, AstNodeLinks(
           parent = item.parentAstNode,
@@ -232,8 +217,11 @@ internal fun convert(
         prev?.links?.next = newNode
 
         // Push child processing onto the explicit stack instead of recursing
+        // Custom inline/block nodes are treated as leaves — their renderer owns child traversal.
         val child = cmNode.firstChild
-        if (child != null && (newNode.type as? AstResourceTag)?.uri?.startsWith(KB_URI_SCHEME) != true) {
+        val isCustomLeaf = newNode.type is AstCustomInlineNodeType ||
+        newNode.type is AstCustomBlockNodeType
+        if (child != null && !isCustomLeaf) {
           stack.addLast(ConvertWorkItem(child, newNode, null) { newNode.links.firstChild = it })
         }
 
@@ -262,7 +250,8 @@ internal fun convert(
 }
 
 public actual class CommonmarkAstNodeParser actual constructor(
-  options: CommonMarkdownParseOptions
+  options: CommonMarkdownParseOptions,
+  private val plugins: List<AstNodePlugin>,
 ) {
 
   private val parser = Parser.builder()
@@ -284,7 +273,7 @@ public actual class CommonmarkAstNodeParser actual constructor(
         "Could not parse the given text content into a meaningful Markdown representation!"
       )
 
-    return convert(commonmarkNode, fadeOutEffect = fadeOutEffect)
+    return convert(commonmarkNode, fadeOutEffect = fadeOutEffect, plugins = plugins)
       ?: throw IllegalArgumentException(
         "Could not convert the generated Commonmark Node into an ASTNode!"
       )

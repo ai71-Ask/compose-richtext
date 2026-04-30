@@ -1,7 +1,6 @@
 package com.halilibo.richtext.markdown.node
 
 import androidx.compose.runtime.Immutable
-import com.halilibo.richtext.markdown.ResourceType
 import com.halilibo.richtext.ui.string.RichTextString
 
 /**
@@ -29,6 +28,14 @@ public sealed class AstNodeType
 //region AstBlockNodeType
 
 public sealed class AstBlockNodeType: AstNodeType()
+
+/**
+ * Open base type for consumer-defined block nodes. Subclass this to introduce custom block-level
+ * node types (e.g. callouts, custom embeds) without modifying the sealed hierarchy. Pair with an
+ * [com.halilibo.richtext.commonmark.AstNodePlugin] to produce instances during parsing and an
+ * [com.halilibo.richtext.markdown.AstBlockNodeComposer] to render them.
+ */
+public abstract class AstCustomBlockNodeType : AstBlockNodeType()
 
 //region AstContainerBlockNodeType
 
@@ -141,6 +148,14 @@ public data class AstParagraph(
  */
 public sealed class AstInlineNodeType: AstNodeType()
 
+/**
+ * Open base type for consumer-defined inline nodes. Subclass this to introduce custom inline node
+ * types (e.g. citation badges, mentions) without modifying the sealed hierarchy. Pair with an
+ * [com.halilibo.richtext.commonmark.AstNodePlugin] to produce instances during parsing and an
+ * [com.halilibo.richtext.markdown.AstInlineNodeComposer] to render them.
+ */
+public abstract class AstCustomInlineNodeType : AstInlineNodeType()
+
 @Immutable
 public data class AstCode(
   val literal: String
@@ -187,16 +202,6 @@ public object AstSoftLineBreak : AstInlineNodeType()
 @Immutable
 public data class AstText(
   val literal: String
-) : AstInlineNodeType()
-
-/**
- * Custom inline resource tag: <resource type="..." uri="..." />
- * Used for rendering inline clickable badges that reference external resources.
- */
-@Immutable
-public data class AstResourceTag(
-  val resourceType: ResourceType,
-  val uri: String
 ) : AstInlineNodeType()
 
 //endregion

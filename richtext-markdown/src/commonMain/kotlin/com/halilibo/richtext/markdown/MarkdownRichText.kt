@@ -3,13 +3,13 @@ package com.halilibo.richtext.markdown
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.halilibo.richtext.markdown.node.AstBlockQuote
 import com.halilibo.richtext.markdown.node.AstCode
+import com.halilibo.richtext.markdown.node.AstCustomInlineNodeType
 import com.halilibo.richtext.markdown.node.AstEmphasis
 import com.halilibo.richtext.markdown.node.AstFencedCodeBlock
 import com.halilibo.richtext.markdown.node.AstHardLineBreak
@@ -21,7 +21,6 @@ import com.halilibo.richtext.markdown.node.AstLinkReferenceDefinition
 import com.halilibo.richtext.markdown.node.AstListItem
 import com.halilibo.richtext.markdown.node.AstNode
 import com.halilibo.richtext.markdown.node.AstParagraph
-import com.halilibo.richtext.markdown.node.AstResourceTag
 import com.halilibo.richtext.markdown.node.AstSoftLineBreak
 import com.halilibo.richtext.markdown.node.AstStrikethrough
 import com.halilibo.richtext.markdown.node.AstStrongEmphasis
@@ -59,15 +58,19 @@ import com.halilibo.richtext.ui.string.withFormat
  */
 @Composable
 internal fun RichTextScope.MarkdownRichText(astNode: AstNode, modifier: Modifier = Modifier, fadeOutEffect: Boolean = false) {
+  val inlineComposer = LocalInlineNodeComposer.current
   // Assume that only RichText nodes reside below this level.
-  val richText = remember(astNode) {
-    computeRichTextString(astNode)
+  val richText = remember(astNode, inlineComposer) {
+    computeRichTextString(astNode, inlineComposer)
   }
 
   Text(text = richText, modifier = modifier, fadeOutEffect = fadeOutEffect)
 }
 
-private fun computeRichTextString(astNode: AstNode): RichTextString {
+private fun computeRichTextString(
+  astNode: AstNode,
+  inlineComposer: AstInlineNodeComposer?,
+): RichTextString {
   val richTextStringBuilder = RichTextString.Builder()
 
   // Modified pre-order traversal with pushFormat, popFormat support.
@@ -130,42 +133,10 @@ private fun computeRichTextString(astNode: AstNode): RichTextString {
         }
         is AstLinkReferenceDefinition -> richTextStringBuilder.pushFormat(
           RichTextString.Format.Link(destination = currentNodeType.destination))
-        is AstResourceTag -> {
-          val uri = currentNodeType.uri
-          val resourceType = currentNodeType.resourceType
-          richTextStringBuilder.appendInlineContent(
-            content = InlineContent(
-              initialSize = {
-                // Default size for resource badge (24dp x 24dp)
-                IntSize(24.dp.roundToPx(), 24.dp.roundToPx())
-              }
-            ) {
-              val renderer = LocalResourceTagRenderer.current
-              val indicesByType = LocalResourceTagIndices.current
-              // Get the indices map for this specific ResourceType
-              val typeIndices = indicesByType.getOrPut(resourceType) { SnapshotStateMap() }
-              // Get existing index or assign next available one within this type
-              val index = typeIndices[uri] ?: (typeIndices.size + 1).also { newIndex ->
-                typeIndices[uri] = newIndex
-              }
-              val resourceInfo = ResourceTagInfo(
-                resourceType = resourceType,
-                uri = uri,
-                index = index
-              )
-              if (renderer != null) {
-                renderer.content(resourceInfo) {
-                  renderer.onResourceTagClick?.onClick(resourceInfo)
-                }
-              } else {
-                // Default rendering: use built-in ResourceBadge
-                ResourceBadge(
-                  index = index,
-                  onClick = { /* No-op when no renderer provided */ }
-                )
-              }
-            }
-          )
+        is AstCustomInlineNodeType -> {
+          if (inlineComposer != null && inlineComposer.predicate(currentNodeType)) {
+            inlineComposer.appendInline(richTextStringBuilder, currentNode)
+          }
           null
         }
         else -> null
