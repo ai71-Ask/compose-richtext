@@ -34,7 +34,7 @@ public fun RichTextScope.Text(
 ) {
   val style = currentRichTextStyle.stringStyle
   val contentColor = currentContentColor
-  val annotated = remember(text, style, contentColor) {
+  val annotated = remember(text, style, contentColor, fadeOutEffect) {
     val resolvedStyle = (style ?: RichTextStringStyle.Default).resolveDefaults()
     if (fadeOutEffect) {
         applyAnimatedFadeEffect(

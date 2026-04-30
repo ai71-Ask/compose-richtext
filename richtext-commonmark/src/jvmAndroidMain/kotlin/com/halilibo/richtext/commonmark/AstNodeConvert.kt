@@ -90,7 +90,7 @@ private class ConvertWorkItem(
  * Maps a CommonMark [Node] to its corresponding [AstNodeType].
  * Returns null for unrecognized node types (CustomNode, CustomBlock, etc.).
  */
-private fun convertNodeType(node: Node): AstNodeType? = when (node) {
+private fun convertNodeType(node: Node, lastParagraphNode: Paragraph?): AstNodeType? = when (node) {
   is BlockQuote -> AstBlockQuote
   is BulletList -> AstUnorderedList(bulletMarker = node.bulletMarker)
   is Code -> AstCode(literal = node.literal)
@@ -129,7 +129,7 @@ private fun convertNodeType(node: Node): AstNodeType? = when (node) {
     startNumber = node.startNumber,
     delimiter = node.delimiter
   )
-  is Paragraph -> AstParagraph(false)
+  is Paragraph -> AstParagraph(fadeOutEffect = node === lastParagraphNode)
   is SoftLineBreak -> AstSoftLineBreak
   is StrongEmphasis -> AstStrongEmphasis(
       delimiter = node.openingDelimiter
@@ -176,10 +176,10 @@ private fun convertNodeType(node: Node): AstNodeType? = when (node) {
  */
 internal fun convert(
   node: Node?,
-  fadeOutEffect: Boolean = false,
   parentNode: AstNode? = null,
   previousNode: AstNode? = null,
   plugins: List<AstNodePlugin> = emptyList(),
+  lastParagraphNode: Paragraph? = null,
 ): AstNode? {
   node ?: return null
 
@@ -204,7 +204,7 @@ internal fun convert(
             break
         }
       }
-      val nodeType = pluginNode ?: convertNodeType(cmNode)
+      val nodeType = pluginNode ?: convertNodeType(cmNode, lastParagraphNode)
       val newNode = nodeType?.let {
         AstNode(it, AstNodeLinks(
           parent = item.parentAstNode,
@@ -273,9 +273,32 @@ public actual class CommonmarkAstNodeParser actual constructor(
         "Could not parse the given text content into a meaningful Markdown representation!"
       )
 
-    return convert(commonmarkNode, fadeOutEffect = fadeOutEffect, plugins = plugins)
+    val lastParagraphNode = if (fadeOutEffect) findLastParagraph(commonmarkNode) else null
+
+    return convert(commonmarkNode, plugins = plugins, lastParagraphNode = lastParagraphNode)
       ?: throw IllegalArgumentException(
         "Could not convert the generated Commonmark Node into an ASTNode!"
       )
   }
+}
+
+/**
+ * Finds the last [Paragraph] in document order via iterative rightmost-deepest-first DFS:
+ * children are pushed left-to-right and popped LIFO, so the first [Paragraph] popped is
+ * the textually-last one. Returns null when [node] contains no paragraphs (e.g., a document
+ * ending in a heading or fenced code block).
+ */
+private fun findLastParagraph(node: Node): Paragraph? {
+    val stack = ArrayDeque<Node>()
+    stack.addLast(node)
+    while (stack.isNotEmpty()) {
+        val current = stack.removeLast()
+        if (current is Paragraph) return current
+        var child = current.firstChild
+        while (child != null) {
+            stack.addLast(child)
+            child = child.next
+        }
+    }
+    return null
 }

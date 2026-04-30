@@ -39,6 +39,27 @@ End-to-end shape:
 Consumers wire all three (`plugins`, `astBlockNodeComposer`, `astInlineNodeComposer`) when calling `BasicMarkdown` /
 `Markdown`.
 
+### 2. Streaming fade applied only to the trailing paragraph
+
+`AstParagraph` carries a `fadeOutEffect: Boolean` that the renderer turns into a per-character alpha gradient on the
+last ~20 chars (`Text.applyAnimatedFadeEffect`). When a chat message is mid-stream we want that fade only on the very
+last paragraph of the document — not on every paragraph.
+
+Implementation
+- `CommonmarkAstNodeParser.parse` runs `findLastParagraph(...)` — an iterative DFS over the commonmark tree — to
+  locate the last `Paragraph` node in document order, only when `options.fadeEffect == true`.
+- That reference is threaded through `convert(..., lastParagraphNode = ...)` and into `convertNodeType(node, lastParagraphNode)`,
+  which constructs `AstParagraph(fadeOutEffect = node === lastParagraphNode)`. Only the trailing paragraph is built
+  with the flag set; every other paragraph gets `false`.
+- No-op when the document contains no paragraphs (e.g., ends in a heading or fenced code block).
+- `Text` (`richtext-ui/.../string/Text.kt`) includes `fadeOutEffect` in its `remember(...)` keys so toggling the flag
+  invalidates the cached `AnnotatedString`.
+
+When syncing upstream, expect conflicts in:
+- `richtext-commonmark/.../AstNodeConvert.kt` (`lastParagraphNode` parameter on `convert`/`convertNodeType`,
+  the `is Paragraph ->` arm, `findLastParagraph` helper, and the `parse` call site)
+- `richtext-ui/.../string/Text.kt` (`fadeOutEffect` added to the `remember` keys)
+
 ## Consumer dependency note
 
 Because `AstNodePlugin.convert(node: Any)` is implemented in JVM-only consumer code that casts to
