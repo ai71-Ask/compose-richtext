@@ -33,6 +33,7 @@ kotlin {
 }
 
 dependencies {
+  implementation(Commonmark.core)
   implementation(project(":richtext-commonmark"))
   implementation(project(":richtext-ui-material3"))
   implementation(AndroidX.appcompat)
