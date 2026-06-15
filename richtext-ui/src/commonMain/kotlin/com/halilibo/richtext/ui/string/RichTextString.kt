@@ -29,7 +29,7 @@ import com.halilibo.richtext.ui.string.RichTextString.Format.Strikethrough
 import com.halilibo.richtext.ui.string.RichTextString.Format.Subscript
 import com.halilibo.richtext.ui.string.RichTextString.Format.Superscript
 import com.halilibo.richtext.ui.string.RichTextString.Format.Underline
-import com.halilibo.richtext.ui.util.randomUUID
+
 import kotlin.LazyThreadSafetyMode.NONE
 
 /** Copied from inline content. */
@@ -240,7 +240,7 @@ public class RichTextString internal constructor(
       ) = richTextStyle.italicStyle
     }
 
-    public object Bold : Format(simpleTag = "foo") {
+    public object Bold : Format(simpleTag = "bold") {
       internal val DefaultStyle = SpanStyle(fontWeight = FontWeight.Bold)
       override fun getAnnotation(
         richTextStyle: RichTextStringStyle,
@@ -346,11 +346,10 @@ public class RichTextString internal constructor(
       }
     }
 
-    internal fun registerTag(tags: MutableMap<String, Any>): String {
+    internal fun registerTag(tags: MutableMap<String, Any>, id: String): String {
       simpleTag?.let { return it }
-      val uuid = randomUUID()
-      tags[uuid] = this
-      return "format:$uuid"
+      tags[id] = this
+      return "format:$id"
     }
 
     internal companion object {
@@ -380,18 +379,19 @@ public class RichTextString internal constructor(
   public class Builder(capacity: Int = 16) {
     private val builder = AnnotatedString.Builder(capacity)
     private val formatObjects = mutableMapOf<String, Any>()
+    private var nextId = 0
 
     public fun addFormat(
       format: Format,
       start: Int,
       end: Int
     ) {
-      val tag = format.registerTag(formatObjects)
+      val tag = format.registerTag(formatObjects, (nextId++).toString())
       builder.addStringAnnotation(FormatAnnotationScope, tag, start, end)
     }
 
     public fun pushFormat(format: Format): Int {
-      val tag = format.registerTag(formatObjects)
+      val tag = format.registerTag(formatObjects, (nextId++).toString())
       return builder.pushStringAnnotation(FormatAnnotationScope, tag)
     }
 
@@ -410,7 +410,7 @@ public class RichTextString internal constructor(
       alternateText: String = REPLACEMENT_CHAR,
       content: InlineContent
     ) {
-      val tag = randomUUID()
+      val tag = (nextId++).toString()
       formatObjects["inline:$tag"] = content
       builder.appendInlineContent(tag, alternateText)
     }
@@ -440,13 +440,13 @@ public inline fun Builder.withFormat(
 
 private fun TextLinkStyles.merge(other: TextLinkStyles?): TextLinkStyles {
   return if (other == null) {
-    TextLinkStyles()
+    this
   } else {
     TextLinkStyles(
       style = this.style?.merge(other.style) ?: other.style,
-      focusedStyle = this.style?.merge(other.focusedStyle) ?: other.focusedStyle,
-      hoveredStyle = this.style?.merge(other.hoveredStyle) ?: other.hoveredStyle,
-      pressedStyle = this.style?.merge(other.pressedStyle) ?: other.pressedStyle,
+      focusedStyle = this.focusedStyle?.merge(other.focusedStyle) ?: other.focusedStyle,
+      hoveredStyle = this.hoveredStyle?.merge(other.hoveredStyle) ?: other.hoveredStyle,
+      pressedStyle = this.pressedStyle?.merge(other.pressedStyle) ?: other.pressedStyle,
     )
   }
 }

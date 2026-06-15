@@ -53,7 +53,8 @@ public fun RichTextScope.Text(
       onTextLayout = onTextLayout,
       softWrap = softWrap,
       overflow = overflow,
-      maxLines = maxLines
+      maxLines = maxLines,
+      modifier = modifier,
     )
   } else {
     // expensive constraints reading path
