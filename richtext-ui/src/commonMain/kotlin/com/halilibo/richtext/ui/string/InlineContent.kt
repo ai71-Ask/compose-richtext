@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.structuralEqualityPolicy
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.Placeholder
@@ -38,18 +40,26 @@ public class InlineContent(
  * Converts a map of [InlineContent]s into a map of [InlineTextContent] that is ready to pass to
  * the core Text composable. Whenever any of the contents resize themselves, or if the map changes,
  * a new map will be returned with updated [Placeholder]s.
+ *
+ * @param inlineContentAlphas Per-tag paint alpha (`0f`..`1f`), keyed the same as [inlineContents] —
+ * used by the streaming reveal in `Text.kt` to fade a badge's own composable in as the reveal
+ * wavefront reaches it, instead of substituting a plain space for its placeholder character (which
+ * used to collapse its reserved layout width until the wavefront passed, causing a visible reflow).
+ * Defaults to fully opaque for any tag not present, i.e. when the reveal animation is inactive.
  */
 @Composable internal fun manageInlineTextContents(
   inlineContents: Map<String, InlineContent>,
-  textConstraints: Constraints
+  textConstraints: Constraints,
+  inlineContentAlphas: Map<String, Float> = emptyMap()
 ): Map<String, InlineTextContent> {
   val density = LocalDensity.current
 
-  return inlineContents.mapValues { (_, content) ->
+  return inlineContents.mapValues { (tag, content) ->
     reifyInlineContent(
       content,
       Constraints(maxWidth = textConstraints.maxWidth, maxHeight = textConstraints.maxHeight),
-      density
+      density,
+      alpha = inlineContentAlphas[tag] ?: 1f
     )
   }
 }
@@ -63,7 +73,8 @@ public class InlineContent(
 @Composable private fun reifyInlineContent(
   content: InlineContent,
   contentConstraints: Constraints,
-  density: Density
+  density: Density,
+  alpha: Float
 ): InlineTextContent {
   var size by remember {
     mutableStateOf(
@@ -82,7 +93,12 @@ public class InlineContent(
     )
 
     return InlineTextContent(placeholder) { alternateText ->
-      Layout(content = { content.content(this, alternateText) }) { measurables, _ ->
+      Layout(
+        content = { content.content(this, alternateText) },
+        // Fades the badge itself in as the streaming reveal wavefront reaches it — see the
+        // `alpha` param doc above. A no-op (alpha = 1f) whenever the reveal animation is inactive.
+        modifier = Modifier.graphicsLayer { this.alpha = alpha }
+      ) { measurables, _ ->
         // Measure the content with the constraints for the parent Text layout, not the actual.
         // This allows it to determine exactly how large it needs to be so we can update the
         // placeholder.

@@ -37,6 +37,15 @@ import kotlin.LazyThreadSafetyMode.NONE
 internal const val REPLACEMENT_CHAR: String = "\uFFFD"
 
 /**
+ * First-party marker for the character range of an inline content placeholder (see
+ * [Builder.appendInlineContent]) \u2014 lets consumers (e.g. the streaming reveal animation in
+ * `Text.kt`) identify these positions via [AnnotatedString.getStringAnnotations] without depending
+ * on Compose Foundation's own internal inline-content tag, which isn't part of its public API.
+ */
+@PublishedApi
+internal const val INLINE_CONTENT_MARKER_TAG: String = "com.halilibo.richtext.ui.string.InlineContentMarker"
+
+/**
  * Defines the [SpanStyle]s that are used for various [RichTextString] formatting directives.
  */
 @Immutable
@@ -412,7 +421,9 @@ public class RichTextString internal constructor(
     ) {
       val tag = (nextId++).toString()
       formatObjects["inline:$tag"] = content
+      val start = builder.length
       builder.appendInlineContent(tag, alternateText)
+      builder.addStringAnnotation(INLINE_CONTENT_MARKER_TAG, tag, start, builder.length)
     }
 
     /**
