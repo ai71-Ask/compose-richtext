@@ -1,6 +1,6 @@
 object BuildPlugins {
   // keep in sync with buildSrc/build.gradle.kts
-  val androidGradlePlugin = "com.android.tools.build:gradle:9.1.1"
+  val androidGradlePlugin = "com.android.tools.build:gradle:9.4.1"
 }
 
 object AndroidX {
